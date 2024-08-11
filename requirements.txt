@@ -1,0 +1,4 @@
+pyTelegramBotAPI==5.0.0
+yt-dlp==2024.8.2
+moviepy==2.0.0
+youtube-search-python==1.0.3
