@@ -9,7 +9,7 @@ import time
 import random
 
 # Telegram bot token
-TOKEN = '7186451521:AAFudMLZOFAshnCMpQbloV7iKodztcpImsY'
+TOKEN = '7277031813:AAHRtoG1bGcOuZeZB3ENoXhMAYybR87611Y'
 
 # Initialize bot
 bot = telebot.TeleBot(TOKEN)
