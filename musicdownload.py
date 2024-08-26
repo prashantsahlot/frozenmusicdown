@@ -2,14 +2,16 @@ import telebot
 from telebot import types
 import yt_dlp
 import os
-from moviepy.editor import VideoFileClip
-from youtubesearchpython import VideosSearch
+import requests
 import urllib.parse
 import time
 import random
 
 # Telegram bot token
 TOKEN = '7186451521:AAFudMLZOFAshnCMpQbloV7iKodztcpImsY'
+
+# YouTube API key
+YOUTUBE_API_KEY = 'AIzaSyAwLdpz3tMPrasYUDbuHgxbqBxHp65xv_Q'
 
 # Initialize bot
 bot = telebot.TeleBot(TOKEN)
@@ -69,9 +71,20 @@ def search(message):
 
 def search_youtube(query):
     try:
-        search = VideosSearch(query, limit=5)
-        results = search.result()
-        search_results = [{'title': video['title'], 'url': video['link']} for video in results['result']]
+        search_url = (
+            f"https://www.googleapis.com/youtube/v3/search?"
+            f"part=snippet&q={urllib.parse.quote(query)}&type=video&key={YOUTUBE_API_KEY}&maxResults=5"
+        )
+        response = requests.get(search_url)
+        results = response.json()
+
+        search_results = []
+        if 'items' in results:
+            for item in results['items']:
+                video_title = item['snippet']['title']
+                video_url = f"https://www.youtube.com/watch?v={item['id']['videoId']}"
+                search_results.append({'title': video_title, 'url': video_url})
+
         return search_results
     except Exception as e:
         print(f"Error searching for YouTube videos: {e}")
@@ -91,33 +104,31 @@ def handle_download(message, youtube_link, is_audio, title):
             info_dict = ydl.extract_info(youtube_link, download=True)
             file_path = ydl.prepare_filename(info_dict)
 
-        # Determine file size and convert if necessary
+        # Determine file size and check Telegram's size limit
         file_size_mb = os.path.getsize(file_path) / (1024 * 1024)  # Size in MB
         max_size_mb = 50  # Telegram's max size limit for files
 
-        uploading_message = bot.send_message(message.chat.id, "Uploading, please wait...")
-
-        if is_audio:
-            # Rename to MP3 if it’s audio
-            mp3_path = f'{sanitize_filename(title)}.mp3'
-            os.rename(file_path, mp3_path)
-            file_path = mp3_path
-
-            with open(file_path, 'rb') as media_file:
-                bot.send_audio(message.chat.id, media_file, reply_to_message_id=downloading_message.message_id)
+        if file_size_mb > max_size_mb:
+            bot.reply_to(message, f"File size exceeds the Telegram limit of {max_size_mb} MB.")
+            os.remove(file_path)
         else:
-            if file_size_mb > max_size_mb:
-                # Convert video to MKV if size exceeds limit
-                mkv_path = f'{sanitize_filename(title)}.mkv'
-                convert_video_to_mkv(file_path, mkv_path)
-                file_path = mkv_path
+            uploading_message = bot.send_message(message.chat.id, "Uploading, please wait...")
 
-            with open(file_path, 'rb') as media_file:
-                bot.send_video(message.chat.id, media_file, reply_to_message_id=downloading_message.message_id)
+            if is_audio:
+                # Rename to MP3 if it’s audio
+                mp3_path = f'{sanitize_filename(title)}.mp3'
+                os.rename(file_path, mp3_path)
+                file_path = mp3_path
 
-        os.remove(file_path)
-        bot.delete_message(message.chat.id, uploading_message.message_id)
-        bot.send_message(message.chat.id, "Download complete!")
+                with open(file_path, 'rb') as media_file:
+                    bot.send_audio(message.chat.id, media_file, reply_to_message_id=downloading_message.message_id)
+            else:
+                with open(file_path, 'rb') as media_file:
+                    bot.send_video(message.chat.id, media_file, reply_to_message_id=downloading_message.message_id)
+
+            os.remove(file_path)
+            bot.delete_message(message.chat.id, uploading_message.message_id)
+            bot.send_message(message.chat.id, "Download complete!")
 
     except Exception as e:
         bot.reply_to(message, f"Error: {str(e)}")
@@ -141,14 +152,6 @@ def progress_callback(d, downloading_message):
                 except telebot.apihelper.ApiException as e:
                     print(f"API Exception: {e}")
                     handle_rate_limit(e)
-
-def convert_video_to_mkv(input_path, output_path):
-    try:
-        video = VideoFileClip(input_path)
-        video.write_videofile(output_path, codec='libx264')
-        os.remove(input_path)  # Remove original file after conversion
-    except Exception as e:
-        print(f"Error converting video: {e}")
 
 def sanitize_filename(title):
     # Replace any characters that are invalid in file names
@@ -224,3 +227,4 @@ def send_message_with_retry(chat_id, text):
 
 # Start the bot
 bot.polling()
+
