@@ -8,7 +8,7 @@ import time
 import random
 
 # Telegram bot token
-TOKEN = '7277031813:AAHRtoG1bGcOuZeZB3ENoXhMAYybR87611Y'
+TOKEN = '7277031813:AAEoK9y4cdPQrp-Y6w6Xe2usdH5DQQEaRyI'
 
 # YouTube API key
 YOUTUBE_API_KEY = 'AIzaSyAwLdpz3tMPrasYUDbuHgxbqBxHp65xv_Q'
