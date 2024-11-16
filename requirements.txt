@@ -28,3 +28,4 @@ urllib3==2.2.2
 websockets==12.0
 youtube-search-python==1.6.6
 yt-dlp==2024.8.6
+flask
