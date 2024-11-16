@@ -13,7 +13,7 @@ import urllib.parse
 TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 
 # Initialize bot
-bot = telebot.TeleBot(TOKEN)
+bot = telebot.TeleBot(8147016747:AAGc7J9KChqEK5qOxEXz3K-qYQBe1WrQOt4)
 
 # Initialize Flask app
 app = Flask(__name__)
