@@ -1,22 +1,26 @@
-import telebot
-from telebot import types
-import yt_dlp
 import os
-from moviepy.editor import VideoFileClip
-from youtubesearchpython import VideosSearch
-import urllib.parse
 import time
 import random
+import telebot
+from telebot import types
+from flask import Flask
+from threading import Thread
+import yt_dlp
+from youtubesearchpython import VideosSearch
+import urllib.parse
 
 # Telegram bot token
-TOKEN = '7186451521:AAE8SfTc17NcFwQaDW6V-TnyAkBZ2hPT854'
+TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 
 # Initialize bot
 bot = telebot.TeleBot(TOKEN)
 
+# Initialize Flask app
+app = Flask(__name__)
+
 # Define limits
-MAX_BUTTON_TEXT_LENGTH = 64  # Maximum length for button text
-MAX_CALLBACK_DATA_LENGTH = 64  # Maximum length for callback data
+MAX_BUTTON_TEXT_LENGTH = 64
+MAX_CALLBACK_DATA_LENGTH = 64
 
 # Start image link
 START_IMAGE_LINK = 'https://telegra.ph/file/82e3f9434e48d348fa223.jpg'
@@ -34,6 +38,15 @@ rate_limit_retries = 0
 MAX_RETRIES = 5
 UPDATE_INTERVAL = 1  # Update progress every 2 seconds
 
+@app.route('/')
+def home():
+    return "Bot is running!"
+
+def run_flask():
+    app.run(host="0.0.0.0", port=5000)
+
+# Telegram bot functions
+
 @bot.message_handler(commands=['start', 'help'])
 def start(message):
     bot.send_photo(message.chat.id, START_IMAGE_LINK, caption=START_MENU_TEXT)
@@ -48,11 +61,10 @@ def search(message):
             for index, result in enumerate(search_results):
                 video_url = result['url']
                 video_title = result['title']
-                # Encode URL and title
+                
                 encoded_url = urllib.parse.quote(video_url)
                 encoded_title = urllib.parse.quote(video_title)
                 
-                # Truncate or shorten text and callback data
                 button_text_audio = truncate_text(f"{index + 1}. Download Audio")
                 button_text_video = truncate_text(f"{index + 1}. Download Video")
                 callback_data_audio = truncate_text(f"audio {encoded_url} {encoded_title}")
@@ -85,6 +97,7 @@ def handle_download(message, youtube_link, is_audio, title):
             'format': 'bestaudio/best' if is_audio else 'best',
             'outtmpl': f'{sanitize_filename(title)}.%(ext)s',
             'progress_hooks': [lambda d: progress_callback(d, downloading_message)],
+            'cookiefile': 'cookies.txt',  # Add the cookies file here
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -142,23 +155,13 @@ def progress_callback(d, downloading_message):
                     print(f"API Exception: {e}")
                     handle_rate_limit(e)
 
-def convert_video_to_mkv(input_path, output_path):
-    try:
-        video = VideoFileClip(input_path)
-        video.write_videofile(output_path, codec='libx264')
-        os.remove(input_path)  # Remove original file after conversion
-    except Exception as e:
-        print(f"Error converting video: {e}")
-
 def sanitize_filename(title):
-    # Replace any characters that are invalid in file names
     return ''.join(c for c in title if c.isalnum() or c in (' ', '_', '-'))
 
 def truncate_text(text, max_length=MAX_BUTTON_TEXT_LENGTH):
     return text[:max_length]  # Truncate text to the maximum length
 
 def decode_callback_data(data):
-    # Decode URL and title from callback data
     parts = data.rsplit(' ', 1)
     if len(parts) == 2:
         url = urllib.parse.unquote(parts[0])
@@ -182,10 +185,10 @@ def download_video(message, data):
 
 def handle_rate_limit(e):
     global rate_limit_retries
-    if e.result.status_code == 429:  # Too Many Requests
+    if e.result.status_code == 429:
         rate_limit_retries += 1
         if rate_limit_retries <= MAX_RETRIES:
-            retry_after = int(e.result.headers.get('Retry-After', 30))  # Default to 30 seconds if not provided
+            retry_after = int(e.result.headers.get('Retry-After', 30))
             print(f"Rate limit exceeded. Retrying after {retry_after} seconds...")
             time.sleep(retry_after)
         else:
@@ -213,14 +216,14 @@ def send_message_with_retry(chat_id, text):
             bot.send_message(chat_id, text)
             return
         except telebot.apihelper.ApiException as e:
-            if e.result.status_code == 429:  # Too Many Requests
-                retry_after = int(e.result.headers.get('Retry-After', 30))  # Default to 30 seconds if not provided
-                time.sleep(retry_after)
-            else:
-                print(f"Unexpected API error: {e}")
-                retries += 1
-                time.sleep(random.uniform(1, 3))  # Random delay before retrying
-    print("Max retries reached. Exiting.")
+            print(f"Retrying due to error: {e}")
+            retries += 1
+            time.sleep(2)  # Delay before retrying
 
-# Start the bot
-bot.polling()
+if __name__ == "__main__":
+    # Start Flask server in a separate thread
+    thread = Thread(target=run_flask)
+    thread.start()
+
+    # Poll the Telegram bot
+    bot.polling(non_stop=True)
